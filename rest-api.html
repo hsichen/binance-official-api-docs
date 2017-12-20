@@ -1,0 +1,2142 @@
+<!doctyle html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+    body {
+      counter-reset: section1 section2 section3 section4;
+      background-color: white;
+    }
+
+    body, p, div, th, td {
+      font-family: verdana, helvetica, arial, sans-serif;
+      font-size: 10pt;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .author {
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .revision {
+      text-align: center;
+      font-style: italic;
+    }
+
+    h2::before {
+      counter-reset: section2 section3 section4;
+      counter-increment: section1;
+      content: counter(section1) " ";
+    }
+
+    h3::before {
+      counter-reset: section3 section4;
+      counter-increment: section2;
+      content: counter(section1) "." counter(section2) " ";
+    }
+
+    h4::before {
+      counter-reset: section4;
+      counter-increment: section3;
+      content: counter(section1) "." counter(section2) "." counter(section3) " ";
+    }
+
+    table {
+      border-collapse: collapse;
+      border-spacing: 0px 0px;
+      margin: 0 auto;
+      page-break-inside: avoid;
+    }
+
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    th, td {
+      padding: 0.2mm 2mm;
+    }
+
+    th:not(:last-child),
+    td:not(:last-child) {
+      border-right: 1px black solid;
+    }
+
+    thead > tr {
+      border-bottom: 1px black solid;
+    }
+
+    tbody > tr:not(:last-of-type) {
+      border-bottom: 1px black solid;
+    }
+
+    @media print {
+      @page {
+        padding: 2cm 4cm;
+      }
+
+      .beginning-of-doc {
+        padding-top: 4cm;
+      }
+
+      hr {
+        height: 2px;
+        background-color: black;
+        border: none;
+      }
+
+
+      h2 {
+        margin-top: 1.5cm;
+        padding-left: 1cm;
+        border-bottom: 2px solid black;
+        page-break-after: avoid;
+      }
+
+      h3 {
+        margin-top: 1cm;
+        padding-left: 1cm;
+        page-break-after: avoid;
+      }
+
+      h4 {
+        padding-left: 1cm;
+        page-break-after: avoid;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <div class="beginning-of-doc"></div>
+    <h1 id="publicrestapiforbinance20171201">Public Rest API for Binance (2017-12-01)</h1>
+
+<h1 id="generalapiinformation">General API Information</h1>
+
+<ul>
+<li>The base endpoint is: <strong>https://api.binance.com</strong></li>
+
+<li>All endpoints return either a JSON object or array.</li>
+
+<li>Data is returned in <strong>ascending</strong> order. Oldest first, newest last.</li>
+
+<li>All time and timestamp related fields are in milliseconds.</li>
+
+<li>HTTP <code>4XX</code> return codes are used for for malformed requests;
+the issue is on the sender's side.</li>
+
+<li>HTTP <code>429</code> return code is used when breaking a request rate limit.</li>
+
+<li>HTTP <code>418</code> return code is used when an IP has been auto-banned for continuing to send requests after receiving <code>429</code> codes.</li>
+
+<li>HTTP <code>5XX</code> return codes are used for internal errors; the issue is on
+Binance's side.</li>
+
+<li>HTTP <code>504</code> return code is used when the API successfully sent the message
+but not get a response within the timeout period.
+It is important to <strong>NOT</strong> treat this as a failure; the execution status is
+<strong>UNKNOWN</strong> and could have been a success.</li>
+
+<li>Any endpoint can retun an ERROR; the error payload is as follows:</li>
+</ul>
+
+<pre><code class="javascript language-javascript">{
+  "code": -1121,
+  "msg": "Invalid symbol."
+}
+</code></pre>
+
+<ul>
+<li>Specific error codes and messages defined in another document.</li>
+
+<li>For <code>GET</code> endpoints, parameters must be sent as a <code>query string</code>.</li>
+
+<li>For <code>POST</code>, <code>PUT</code>, and <code>DELETE</code> endpoints, the parameters may be sent as a
+<code>query string</code> or in the <code>request body</code> with content type
+<code>application/x-www-form-urlencoded</code>. You may mix parameters between both the
+<code>query string</code> and <code>request body</code> if you wish to do so.</li>
+
+<li>Parameters may be sent in any order.</li>
+
+<li>If a parameter sent in both the <code>query string</code> and <code>request body</code>, the
+<code>query string</code> parameter will be used.</li>
+</ul>
+
+<h1 id="limits">LIMITS</h1>
+
+<ul>
+<li>The <code>/api/v1/exchangeInfo</code> <code>rateLimits</code> array contains objects related to the exchange's <code>REQUESTS</code> and <code>ORDER</code> rate limits.</li>
+
+<li>A 429 will be returned when either rather limit is violated.</li>
+
+<li>Each route has a <code>weight</code> which determines for the number of requests each endpoint counts for. Heavier endpoints and endpoints that do operations on multiple symbols will have a heavier <code>weight</code>.</li>
+
+<li>When a 429 is recieved, it's your obligation as an API to back off and not spam the API.</li>
+
+<li><strong>Repeatedly violating rate limits and/or failing to back off after receiving 429s will result in an automated IP ban (http status 418).</strong></li>
+
+<li>IP bans are tracked and <strong>scale in duration</strong> for repeat offenders, <strong>from 2 minutes to 3 days</strong>.</li>
+</ul>
+
+<h1 id="endpointsecuritytype">Endpoint security type</h1>
+
+<ul>
+<li>Each endpoint has a security type that determines the how you will
+interact with it.</li>
+
+<li>API-keys are passed into the Rest API via the <code>X-MBX-APIKEY</code>
+header.</li>
+
+<li>API-keys and secret-keys <strong>are case sensitive</strong>.</li>
+
+<li>API-keys can be configured to only access certain types of secure endpoints.
+For example, one API-key could be used for TRADE only, while another API-key
+can access everything except for TRADE routes.</li>
+
+<li>By default, API-keys can access all secure routes.</li>
+</ul>
+
+<table>
+
+<tr>
+<th>Security Type</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>NONE</td>
+<td>Endpoint can be accessed freely.</td>
+</tr>
+<tr>
+<td>TRADE</td>
+<td>Endpoint requires sending a valid API-Key and signature.</td>
+</tr>
+<tr>
+<td>USER_DATA</td>
+<td>Endpoint requires sending a valid API-Key and signature.</td>
+</tr>
+<tr>
+<td>USER_STREAM</td>
+<td>Endpoint requires sending a valid API-Key.</td>
+</tr>
+<tr>
+<td>MARKET_DATA</td>
+<td>Endpoint requires sending a valid API-Key.</td>
+</tr>
+
+</table>
+
+<ul>
+<li><code>TRADE</code> and <code>USER_DATA</code> endpoints are <code>SIGNED</code> endpoints.</li>
+</ul>
+
+<h1 id="signedtradeanduser_dataendpointsecurity">SIGNED (TRADE and USER_DATA) Endpoint security</h1>
+
+<ul>
+<li><code>SIGNED</code> endpoints require an additional parameter, <code>signature</code>, to be
+sent in the  <code>query string</code> or <code>request body</code>.</li>
+
+<li>Endpoints use <code>HMAC SHA256</code> signatures. The <code>HMAC SHA256 signature</code> is a keyed <code>HMAC SHA256</code> operation.
+Use your <code>secretKey</code> as the key and <code>totalParams</code> as the value for the HMAC operation.</li>
+
+<li>The <code>signature</code> is <strong>not case sensitive</strong>.</li>
+
+<li><code>totalParams</code> is defined as the <code>query string</code> concatenated with the
+<code>request body</code>.</li>
+</ul>
+
+<h2 id="timingsecurity">Timing security</h2>
+
+<ul>
+<li>A <code>SIGNED</code> endpoint also requires a parameter, <code>timestamp</code>, to be sent which
+should be the millisecond timestamp of when the request was created and sent.</li>
+
+<li>An additional parameter, <code>recvWindow</code>, may be sent to specific the number of
+milliseconds after <code>timestamp</code> the request is valid for. If <code>recvWindow</code>
+is not sent, <strong>it defaults to 5000</strong>.</li>
+
+<li>The logic is as follows:
+<code>javascript
+if (timestamp &lt; (serverTime + 1000) &amp;&amp; (serverTime - timestamp) &lt;= recvWindow) {
+// process request
+} else {
+// reject request
+}
+</code></li>
+</ul>
+
+<p><strong>Serious trading is about timing.</strong> Networks can be unstable and unreliable,
+which can lead to requests taking varying amounts of time to reach the
+servers. With <code>recvWindow</code>, you can specify that the request must be
+processed within a certain number of milliseconds or be rejected by the
+server.</p>
+
+<p><strong>Tt recommended to use a small recvWindow of 5000 or less!</strong></p>
+
+<h2 id="signedendpointexamplesforpostapiv1order">SIGNED Endpoint Examples for POST /api/v1/order</h2>
+
+<p>Here is a step-by-step example of how to send a vaild signed payload from the
+Linux command line using <code>echo</code>, <code>openssl</code>, and <code>curl</code>.</p>
+
+<table>
+
+<tr>
+<th>Key</th>
+<th>Value</th>
+</tr>
+
+
+<tr>
+<td>apiKey</td>
+<td>vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A</td>
+</tr>
+<tr>
+<td>secretKey</td>
+<td>NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j</td>
+</tr>
+
+</table>
+
+<table>
+
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>LTCBTC</td>
+</tr>
+<tr>
+<td>side</td>
+<td>BUY</td>
+</tr>
+<tr>
+<td>type</td>
+<td>LIMIT</td>
+</tr>
+<tr>
+<td>timeInForce</td>
+<td>GTC</td>
+</tr>
+<tr>
+<td>quantity</td>
+<td>1</td>
+</tr>
+<tr>
+<td>price</td>
+<td>0.1</td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>5000</td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>1499827319559</td>
+</tr>
+
+</table>
+
+<h3 id="example1asaquerystring">Example 1: As a query string</h3>
+
+<ul>
+<li><p><strong>queryString:</strong> symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC&amp;quantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559</p></li>
+
+<li><p><strong>HMAC SHA256 signature:</strong></p>
+
+<pre><code>[linux]$ echo -n "symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC&amp;quantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559" | openssl dgst -sha256 -hmac "NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j"
+(stdin)= c8db56825ae71d6d79447849e617115f4a920fa2acdcab2b053c4b2838bd6b71
+</code></pre></li>
+
+<li><p><strong>curl command:</strong></p>
+
+<pre><code>(HMAC SHA256)
+[linux]$ curl -H "X-MBX-APIKEY: vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A" -X POST 'https://api.binance.com/api/v3/order?symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC&amp;quantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559&amp;signature=c8db56825ae71d6d79447849e617115f4a920fa2acdcab2b053c4b2838bd6b71'
+</code></pre></li>
+</ul>
+
+<h3 id="example2asarequestbody">Example 2: As a request body</h3>
+
+<ul>
+<li><p><strong>requestBody:</strong> symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC&amp;quantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559</p></li>
+
+<li><p><strong>HMAC SHA256 signature:</strong></p>
+
+<pre><code>[linux]$ echo -n "symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC&amp;quantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559" | openssl dgst -sha256 -hmac "NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j"
+(stdin)= c8db56825ae71d6d79447849e617115f4a920fa2acdcab2b053c4b2838bd6b71
+</code></pre></li>
+
+<li><p><strong>curl command:</strong></p>
+
+<pre><code>(HMAC SHA256)
+[linux]$ curl -H "X-MBX-APIKEY: vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A" -X POST 'https://api.binance.com/api/v3/order' -d 'symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC&amp;quantity=1&amp;price=0.1&amp;recvWindow=6000000&amp;timestamp=1499827319559&amp;signature=c8db56825ae71d6d79447849e617115f4a920fa2acdcab2b053c4b2838bd6b71'
+</code></pre></li>
+</ul>
+
+<h3 id="example3mixedquerystringandrequestbody">Example 3: Mixed query string and request body</h3>
+
+<ul>
+<li><p><strong>queryString:</strong> symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC</p></li>
+
+<li><p><strong>requestBody:</strong> quantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559</p></li>
+
+<li><p><strong>HMAC SHA256 signature:</strong></p>
+
+<pre><code>[linux]$ echo -n "symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTCquantity=1&amp;price=0.1&amp;recvWindow=5000&amp;timestamp=1499827319559" | openssl dgst -sha256 -hmac "NhqPtmdSJYdKjVHjA7PZj4Mge3R5YNiP1e3UZjInClVN65XAbvqqM6A7H5fATj0j"
+(stdin)= 0fd168b8ddb4876a0358a8d14d0c9f3da0e9b20c5d52b2a00fcf7d1c602f9a77
+</code></pre></li>
+
+<li><p><strong>curl command:</strong></p>
+
+<pre><code>(HMAC SHA256)
+[linux]$ curl -H "X-MBX-APIKEY: vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A" -X POST 'https://api.binance.com/api/v3/order?symbol=LTCBTC&amp;side=BUY&amp;type=LIMIT&amp;timeInForce=GTC' -d 'quantity=1&amp;price=0.1&amp;recvWindow=6000000&amp;timestamp=1499827319559&amp;signature=0fd168b8ddb4876a0358a8d14d0c9f3da0e9b20c5d52b2a00fcf7d1c602f9a77'
+</code></pre></li>
+</ul>
+
+<p>Note that the signature is different in example 3.
+There is no &amp; between "GTC" and "quantity=1".</p>
+
+<h1 id="publicapiendpoints">Public API Endpoints</h1>
+
+<h2 id="terminology">Terminology</h2>
+
+<ul>
+<li><code>base asset</code> refers to the asset that is the <code>quantity</code> of a symbol.</li>
+
+<li><code>quoate asset</code> refers to the asset that is the <code>price</code> of a symbol.</li>
+</ul>
+
+<h2 id="enumdefinitions">ENUM definitions</h2>
+
+<p><strong>Symbol status:</strong></p>
+
+<ul>
+<li>PRE_TRADING</li>
+
+<li>TRADING</li>
+
+<li>POST_TRADING</li>
+
+<li>END<em>OF</em>DAY</li>
+
+<li>HALT</li>
+
+<li>AUCTION_MATCH</li>
+
+<li>BREAK</li>
+</ul>
+
+<p><strong>Symbol type:</strong></p>
+
+<ul>
+<li>SPOT</li>
+</ul>
+
+<p><strong>Order status:</strong></p>
+
+<ul>
+<li>NEW</li>
+
+<li>PARTIALLY_FILLED</li>
+
+<li>FILLED</li>
+
+<li>CANCELED</li>
+
+<li>PENDING_CANCEL (currently unused)</li>
+
+<li>REJECTED</li>
+
+<li>EXPIRED</li>
+</ul>
+
+<p><strong>Order types:</strong></p>
+
+<ul>
+<li>LIMIT</li>
+
+<li>MARKET</li>
+
+<li>STOP_LOSS</li>
+
+<li>STOP<em>LOSS</em>LIMIT</li>
+
+<li>TAKE_PROFIT</li>
+
+<li>TAKE<em>PROFIT</em>LIMIT</li>
+
+<li>LIMIT_MAKER</li>
+</ul>
+
+<p><strong>Order side:</strong></p>
+
+<ul>
+<li>BUY</li>
+
+<li>SELL</li>
+</ul>
+
+<p><strong>Time in force:</strong></p>
+
+<ul>
+<li>GTC</li>
+
+<li>IOC</li>
+
+<li>FOK</li>
+</ul>
+
+<p><strong>Kline/Candlestick chart intervals:</strong></p>
+
+<p>m -> minutes; h -> hours; d -> days; w -> weeks; M -> months</p>
+
+<ul>
+<li>1m</li>
+
+<li>3m</li>
+
+<li>5m</li>
+
+<li>15m</li>
+
+<li>30m</li>
+
+<li>1h</li>
+
+<li>2h</li>
+
+<li>4h</li>
+
+<li>6h</li>
+
+<li>8h</li>
+
+<li>12h</li>
+
+<li>1d</li>
+
+<li>3d</li>
+
+<li>1w</li>
+
+<li>1M</li>
+</ul>
+
+<p><strong>Rate limiters (rateLimitType)</strong></p>
+
+<ul>
+<li>REQUESTS</li>
+
+<li>ORDERS</li>
+</ul>
+
+<p><strong>Rate limit intervals</strong></p>
+
+<ul>
+<li>SECOND</li>
+
+<li>MINUTE</li>
+
+<li>DAY</li>
+</ul>
+
+<h2 id="generalendpoints">General endpoints</h2>
+
+<h3 id="testconnectivity">Test connectivity</h3>
+
+<pre><code>GET /api/v1/ping
+</code></pre>
+
+<p>Test connectivity to the Rest API.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong>
+NONE</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{}
+</code></pre>
+
+<h3 id="checkservertime">Check server time</h3>
+
+<pre><code>GET /api/v1/time
+</code></pre>
+
+<p>Test connectivity to the Rest API and get the current server time.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong>
+NONE</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "serverTime": 1499827319559
+}
+</code></pre>
+
+<h3 id="exchangeinformation">Exchange information</h3>
+
+<pre><code>GET /api/v1/exchangeInfo
+</code></pre>
+
+<p>Current exchange trading rules and symbol information</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong>
+NONE</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "timezone": "UTC",
+  "serverTime": 1508631584636,
+  "rateLimits": [{
+      "rateLimitType": "REQUESTS",
+      "interval": "MINUTE",
+      "limit": 1200
+    },
+    {
+      "rateLimitType": "ORDERS",
+      "interval": "SECOND",
+      "limit": 10
+    },
+    {
+      "rateLimitType": "ORDERS",
+      "interval": "DAY",
+      "limit": 100000
+    }
+  ],
+  "exchangeFilters": [],
+  "symbols": [{
+    "symbol": "ETHBTC",
+    "status": "TRADING",
+    "baseAsset": "ETH",
+    "baseAssetPrecision": 8,
+    "quoteAsset": "BTC",
+    "quotePrecision": 8,
+    "orderTypes": ["LIMIT", "MARKET"],
+    "icebergAllowed": false,
+    "filters": [{
+      "filterType": "PRICE_FILTER",
+      "minPrice": "0.00000100",
+      "maxPrice": "100000.00000000",
+      "tickSize": "0.00000100"
+    }, {
+      "filterType": "LOT_SIZE",
+      "minQty": "0.00100000",
+      "maxQty": "100000.00000000",
+      "stepSize": "0.00100000"
+    }, {
+      "filterType": "MIN_NOTIONAL",
+      "minNotional": "0.00100000"
+    }]
+  }]
+}
+</code></pre>
+
+<h2 id="marketdataendpoints">Market Data endpoints</h2>
+
+<h3 id="orderbook">Order book</h3>
+
+<pre><code>GET /api/v1/depth
+</code></pre>
+
+<p><strong>Weight:</strong>
+Adjusted based on the limit:</p>
+
+<table>
+
+<tr>
+<th>Limit</th>
+<th>Weight</th>
+</tr>
+
+
+<tr>
+<td>5, 10, 20, 50, 100</td>
+<td>1</td>
+</tr>
+<tr>
+<td>500</td>
+<td>25</td>
+</tr>
+<tr>
+<td>1000</td>
+<td>50</td>
+</tr>
+
+</table>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 100; max 1000. Valid limits:[5, 10, 20, 50, 100, 500, 1000]</td>
+</tr>
+
+</table>
+
+<p><strong>Caution:</strong> setting limit=0 can return a lot of data.</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "lastUpdateId": 1027024,
+  "bids": [
+    [
+      "4.00000000",     // PRICE
+      "431.00000000",   // QTY
+      []                // Ignore.
+    ]
+  ],
+  "asks": [
+    [
+      "4.00000200",
+      "12.00000000",
+      []
+    ]
+  ]
+}
+</code></pre>
+
+<h3 id="recenttradeslist">Recent trades list</h3>
+
+<pre><code>GET /api/v1/trades
+</code></pre>
+
+<p>Get recent trades (up to last 500).</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 500; max 500.</td>
+</tr>
+
+</table>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "id": 28457,
+    "price": "4.00000100",
+    "qty": "12.00000000",
+    "time": 1499865549590,
+    "isBuyerMaker": true,
+    "isBestMatch": true
+  }
+]
+</code></pre>
+
+<h3 id="oldtradelookupmarket_data">Old trade lookup (MARKET_DATA)</h3>
+
+<pre><code>GET /api/v1/historicalTrades
+</code></pre>
+
+<p>Get older trades.</p>
+
+<p><strong>Weight:</strong>
+100</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 500; max 500.</td>
+</tr>
+<tr>
+<td>fromId</td>
+<td>LONG</td>
+<td>NO</td>
+<td>TradeId to fetch from. Default gets most recent trades.</td>
+</tr>
+
+</table>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "id": 28457,
+    "price": "4.00000100",
+    "qty": "12.00000000",
+    "time": 1499865549590,
+    "isBuyerMaker": true,
+    "isBestMatch": true
+  }
+]
+</code></pre>
+
+<h3 id="compressedaggregatetradeslist">Compressed/Aggregate trades list</h3>
+
+<pre><code>GET /api/v1/aggTrades
+</code></pre>
+
+<p>Get compressed, aggregate trades. Trades that fill at the time, from the same
+order, with the same price will have the quantity aggregated.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>fromId</td>
+<td>LONG</td>
+<td>NO</td>
+<td>ID to get aggregate trades from INCLUSIVE.</td>
+</tr>
+<tr>
+<td>startTime</td>
+<td>LONG</td>
+<td>NO</td>
+<td>Timestamp in ms to get aggregate trades from INCLUSIVE.</td>
+</tr>
+<tr>
+<td>endTime</td>
+<td>LONG</td>
+<td>NO</td>
+<td>Timestamp in ms to get aggregate trades until INCLUSIVE.</td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 500; max 500.</td>
+</tr>
+
+</table>
+
+<ul>
+<li>If both startTime and endTime are sent, limit should not be sent AND the distance between startTime and endTime must be less than 24 hours.</li>
+
+<li>If frondId, startTime, and endTime are not sent, the most recent aggregate trades will be returned.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "a": 26129,         // Aggregate tradeId
+    "p": "0.01633102",  // Price
+    "q": "4.70443515",  // Quantity
+    "f": 27781,         // First tradeId
+    "l": 27781,         // Last tradeId
+    "T": 1498793709153, // Timestamp
+    "m": true,          // Was the buyer the maker?
+    "M": true           // Was the trade the best price match?
+  }
+]
+</code></pre>
+
+<h3 id="klinecandlestickdata">Kline/Candlestick data</h3>
+
+<pre><code>GET /api/v1/klines
+</code></pre>
+
+<p>Kline/candlestick bars for a symbol.
+Klines are uniquely identified by their open time.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>interval</td>
+<td>ENUM</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 500; max 500.</td>
+</tr>
+<tr>
+<td>startTime</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>endTime</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+
+</table>
+
+<ul>
+<li>If startTime and endTime are not sent, the most recent klines are returned.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  [
+    1499040000000,      // Open time
+    "0.01634790",       // Open
+    "0.80000000",       // High
+    "0.01575800",       // Low
+    "0.01577100",       // Close
+    "148976.11427815",  // Volume
+    1499644799999,      // Close time
+    "2434.19055334",    // Quote asset volume
+    308,                // Number of trades
+    "1756.87402397",    // Taker buy base asset volume
+    "28.46694368",      // Taker buy quote asset volume
+    "17928899.62484339" // Ignore
+  ]
+]
+</code></pre>
+
+<h3 id="24hrtickerpricechangestatistics">24hr ticker price change statistics</h3>
+
+<pre><code>GET /api/v1/ticker/24hr
+</code></pre>
+
+<p>24 hour price change statistics. <strong>Careful</strong> when accessing this with no symbol.</p>
+
+<p><strong>Weight:</strong>
+1 for a single symbol; <strong>number of symbols</strong> that are <code>TRADING</code> when the symbol parameter is omitted</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>NO</td>
+<td></td>
+</tr>
+
+</table>
+
+<ul>
+<li>If the symbol is not sent, tickers for all symbols will be returned in an array.</li>
+
+<li>When all symbols are returned, the number of requests counted against the rate limiter is equal to the number of symbols currently trading on the exchange.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "BNBBTC",
+  "priceChange": "-94.99999800",
+  "priceChangePercent": "-95.960",
+  "weightedAvgPrice": "0.29628482",
+  "prevClosePrice": "0.10002000",
+  "lastPrice": "4.00000200",
+  "lastQty": "200.00000000",
+  "bidPrice": "4.00000000",
+  "askPrice": "4.00000200",
+  "openPrice": "99.00000000",
+  "highPrice": "100.00000000",
+  "lowPrice": "0.10000000",
+  "volume": "8913.30000000",
+  "quoteVolume": "15.30000000",
+  "openTime": 1499783499040,
+  "closeTime": 1499869899040,
+  "fristId": 28385,   // First tradeId
+  "lastId": 28460,    // Last tradeId
+  "count": 76         // Trade count
+}
+</code></pre>
+
+<p>OR</p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "symbol": "BNBBTC",
+    "priceChange": "-94.99999800",
+    "priceChangePercent": "-95.960",
+    "weightedAvgPrice": "0.29628482",
+    "prevClosePrice": "0.10002000",
+    "lastPrice": "4.00000200",
+    "lastQty": "200.00000000",
+    "bidPrice": "4.00000000",
+    "askPrice": "4.00000200",
+    "openPrice": "99.00000000",
+    "highPrice": "100.00000000",
+    "lowPrice": "0.10000000",
+    "volume": "8913.30000000",
+    "quoteVolume": "15.30000000",
+    "openTime": 1499783499040,
+    "closeTime": 1499869899040,
+    "fristId": 28385,   // First tradeId
+    "lastId": 28460,    // Last tradeId
+    "count": 76         // Trade count
+  }
+]
+</code></pre>
+
+<h3 id="symbolpriceticker">Symbol price ticker</h3>
+
+<pre><code>GET /api/v3/ticker/price
+</code></pre>
+
+<p>Latest price for a symbol or symbols.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>NO</td>
+<td></td>
+</tr>
+
+</table>
+
+<ul>
+<li>If the symbol is not sent, prices for all symbols will be returned in an array.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "LTCBTC",
+  "price": "4.00000200"
+}
+</code></pre>
+
+<p>OR</p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "symbol": "LTCBTC",
+    "price": "4.00000200"
+  },
+  {
+    "symbol": "ETHBTC",
+    "price": "0.07946600"
+  }
+]
+</code></pre>
+
+<h3 id="symbolorderbookticker">Symbol order book ticker</h3>
+
+<pre><code>GET /api/v3/ticker/bookTicker
+</code></pre>
+
+<p>Best price/qty on the order book for a symbol or symbols.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>NO</td>
+<td></td>
+</tr>
+
+</table>
+
+<ul>
+<li>If the symbol is not sent, bookTickers for all symbols will be returned in an array.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "LTCBTC",
+  "bidPrice": "4.00000000",
+  "bidQty": "431.00000000",
+  "askPrice": "4.00000200",
+  "askQty": "9.00000000"
+}
+</code></pre>
+
+<p>OR</p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "symbol": "LTCBTC",
+    "bidPrice": "4.00000000",
+    "bidQty": "431.00000000",
+    "askPrice": "4.00000200",
+    "askQty": "9.00000000"
+  },
+  {
+    "symbol": "ETHBTC",
+    "bidPrice": "0.07946700",
+    "bidQty": "9.00000000",
+    "askPrice": "100000.00000000",
+    "askQty": "1000.00000000"
+  }
+]
+</code></pre>
+
+<h2 id="accountendpoints">Account endpoints</h2>
+
+<h3 id="newordertrade">New order  (TRADE)</h3>
+
+<pre><code>POST /api/v3/order  (HMAC SHA256)
+</code></pre>
+
+<p>Send in a new order.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>side</td>
+<td>ENUM</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>type</td>
+<td>ENUM</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>timeInForce</td>
+<td>ENUM</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>quantity</td>
+<td>DECIMAL</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>price</td>
+<td>DECIMAL</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>newClientOrderId</td>
+<td>STRING</td>
+<td>NO</td>
+<td>A unique id for the order. Automatically generated if not sent.</td>
+</tr>
+<tr>
+<td>stopPrice</td>
+<td>DECIMAL</td>
+<td>NO</td>
+<td>Used with <code>STOP_LOSS</code>, <code>STOP_LOSS_LIMIT</code>, <code>TAKE_PROFIT</code>, and <code>TAKE_PROFIT_LIMIT</code> orders.</td>
+</tr>
+<tr>
+<td>icebergQty</td>
+<td>DECIMAL</td>
+<td>NO</td>
+<td>Used with <code>LIMIT</code>, <code>STOP_LOSS_LIMIT</code>, and <code>TAKE_PROFIT_LIMIT</code> to create an iceberg order.</td>
+</tr>
+<tr>
+<td>newOrderRespType</td>
+<td>ENUM</td>
+<td>NO</td>
+<td>Set the response JSON. <code>ACK</code>, <code>RESULT</code>, or <code>FULL</code>; default: <code>RESULT</code>.</td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p>Additional mandatory parameters based on <code>type</code>:</p>
+
+<table>
+
+<tr>
+<th>Type</th>
+<th>Additional mandatory parameters</th>
+</tr>
+
+
+<tr>
+<td><code>LIMIT</code></td>
+<td><code>timeInForce</code>, <code>quantity</code>, <code>price</code></td>
+</tr>
+<tr>
+<td><code>MARKET</code></td>
+<td><code>quantity</code></td>
+</tr>
+<tr>
+<td><code>STOP_LOSS</code></td>
+<td><code>quantity</code>, <code>stopPrice</code></td>
+</tr>
+<tr>
+<td><code>STOP_LOSS_LIMIT</code></td>
+<td><code>timeInForce</code>, <code>quantity</code>,  <code>price</code>, <code>stopPrice</code></td>
+</tr>
+<tr>
+<td><code>TAKE_PROFIT</code></td>
+<td><code>quantity</code>, <code>stopPrice</code></td>
+</tr>
+<tr>
+<td><code>TAKE_PROFIT_LIMIT</code></td>
+<td><code>timeInForce</code>, <code>quantity</code>, <code>price</code>, <code>stopPrice</code></td>
+</tr>
+<tr>
+<td><code>LIMIT_MAKER</code></td>
+<td><code>quantity</code>, <code>price</code></td>
+</tr>
+
+</table>
+
+<p>Other info:</p>
+
+<ul>
+<li><code>LIMIT_MAKER</code> are <code>LIMIT</code> orders that will be rejected if they would immediately match and trade as a taker.</li>
+
+<li><code>STOP_LOSS</code> and <code>TAKE_PROFIT</code> will execute a <code>MARKET</code> order when the <code>stopPrice</code> is reached.</li>
+
+<li>Any <code>LIMIT</code> or <code>LIMIT_MAKER</code> type order can be made an iceberg order by sending an <code>icebergQty</code>.</li>
+
+<li>Any order with an <code>icebergQty</code> MUST have <code>timeInForce</code> set to <code>GTC</code>.</li>
+</ul>
+
+<p>Trigger order price rules against market price for both MARKET and LIMIT versions:</p>
+
+<ul>
+<li>Price above market price: <code>STOP_LOSS</code> <code>BUY</code>, <code>TAKE_PROFIT</code> <code>SELL</code></li>
+
+<li>Price below market price: <code>STOP_LOSS</code> <code>SELL</code>, <code>TAKE_PROFIT</code> <code>BUY</code></li>
+</ul>
+
+<p><strong>Response ACK:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "BTCUSDT",
+  "orderId": 28,
+  "clientOrderId": "6gCrw2kRUAF9CvJDGP16IP",
+  "transactTime": 1507725176595
+}
+</code></pre>
+
+<p><strong>Response RESULT:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "BTCUSDT",
+  "orderId": 28,
+  "clientOrderId": "6gCrw2kRUAF9CvJDGP16IP",
+  "transactTime": 1507725176595,
+  "price": "0.00000000",
+  "origQty": "10.00000000",
+  "executedQty": "10.00000000",
+  "status": "FILLED",
+  "timeInForce": "GTC",
+  "type": "MARKET",
+  "side": "SELL"
+}
+</code></pre>
+
+<p><strong>Response FULL:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "BTCUSDT",
+  "orderId": 28,
+  "clientOrderId": "6gCrw2kRUAF9CvJDGP16IP",
+  "transactTime": 1507725176595,
+  "price": "0.00000000",
+  "origQty": "10.00000000",
+  "executedQty": "10.00000000",
+  "status": "FILLED",
+  "timeInForce": "GTC",
+  "type": "MARKET",
+  "side": "SELL",
+  "fills": [
+    {
+      "price": "4000.00000000",
+      "qty": "1.00000000",
+      "commission": "4.00000000",
+      "commissionAsset": "USDT"
+    },
+    {
+      "price": "3999.00000000",
+      "qty": "5.00000000",
+      "commission": "19.99500000",
+      "commissionAsset": "USDT"
+    },
+    {
+      "price": "3998.00000000",
+      "qty": "2.00000000",
+      "commission": "7.99600000",
+      "commissionAsset": "USDT"
+    },
+    {
+      "price": "3997.00000000",
+      "qty": "1.00000000",
+      "commission": "3.99700000",
+      "commissionAsset": "USDT"
+    },
+    {
+      "price": "3995.00000000",
+      "qty": "1.00000000",
+      "commission": "3.99500000",
+      "commissionAsset": "USDT"
+    }
+  ]
+}
+</code></pre>
+
+<h3 id="testnewordertrade">Test new order (TRADE)</h3>
+
+<pre><code>POST /api/v3/order/test (HMAC SHA256)
+</code></pre>
+
+<p>Test new order creation and signature/recvWindow long.
+Creates and validates a new order but does not send it into the matching engine.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<p>Same as <code>/api/v3/order</code></p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{}
+</code></pre>
+
+<h3 id="queryorderuser_data">Query order (USER_DATA)</h3>
+
+<pre><code>GET /api/v3/order (HMAC SHA256)
+</code></pre>
+
+<p>Check an order's status.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>orderId</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>origClientOrderId</td>
+<td>STRING</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p>Either <code>orderId</code> or <code>origClientOrderId</code> must be sent.</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "LTCBTC",
+  "orderId": 1,
+  "clientOrderId": "myOrder1",
+  "price": "0.1",
+  "origQty": "1.0",
+  "executedQty": "0.0",
+  "status": "NEW",
+  "timeInForce": "GTC",
+  "type": "LIMIT",
+  "side": "BUY",
+  "stopPrice": "0.0",
+  "icebergQty": "0.0",
+  "time": 1499827319559,
+  "isWorking": true
+}
+</code></pre>
+
+<h3 id="cancelordertrade">Cancel order (TRADE)</h3>
+
+<pre><code>DELETE /api/v3/order  (HMAC SHA256)
+</code></pre>
+
+<p>Cancel an active order.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>orderId</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>origClientOrderId</td>
+<td>STRING</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>newClientOrderId</td>
+<td>STRING</td>
+<td>NO</td>
+<td>Used to uniquely identify this cancel. Automatically generated by default.</td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p>Either <code>orderId</code> or <code>origClientOrderId</code> must be sent.</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "symbol": "LTCBTC",
+  "origClientOrderId": "myOrder1",
+  "orderId": 1,
+  "clientOrderId": "cancelMyOrder1"
+}
+</code></pre>
+
+<h3 id="currentopenordersuser_data">Current open orders (USER_DATA)</h3>
+
+<pre><code>GET /api/v3/openOrders  (HMAC SHA256)
+</code></pre>
+
+<p>Get all open orders on a symbol. <strong>Careful</strong> when accessing this with no symbol.</p>
+
+<p><strong>Weight:</strong>
+1 for a single symbol; <strong>number of symbols</strong> that are <code>TRADING</code> when the symbol parameter is omitted</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<ul>
+<li>If the symbol is not sent, orders for all symbols will be returned in an array.</li>
+
+<li>When all symbols are returned, the number of requests counted against the rate limiter is equal to the number of symbols currently trading on the exchange.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "symbol": "LTCBTC",
+    "orderId": 1,
+    "clientOrderId": "myOrder1",
+    "price": "0.1",
+    "origQty": "1.0",
+    "executedQty": "0.0",
+    "status": "NEW",
+    "timeInForce": "GTC",
+    "type": "LIMIT",
+    "side": "BUY",
+    "stopPrice": "0.0",
+    "icebergQty": "0.0",
+    "time": 1499827319559,
+    "isWorking": trueO
+  }
+]
+</code></pre>
+
+<h3 id="allordersuser_data">All orders (USER_DATA)</h3>
+
+<pre><code>GET /api/v3/allOrders (HMAC SHA256)
+</code></pre>
+
+<p>Get all account orders; active, canceled, or filled.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>orderId</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 500; max 500.</td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<ul>
+<li>If <code>orderId</code> is set, it will get orders >= that <code>orderId</code>.
+Otherwise most recent orders are returned.</li>
+</ul>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "symbol": "LTCBTC",
+    "orderId": 1,
+    "clientOrderId": "myOrder1",
+    "price": "0.1",
+    "origQty": "1.0",
+    "executedQty": "0.0",
+    "status": "NEW",
+    "timeInForce": "GTC",
+    "type": "LIMIT",
+    "side": "BUY",
+    "stopPrice": "0.0",
+    "icebergQty": "0.0",
+    "time": 1499827319559,
+    "isWorking": true
+  }
+]
+</code></pre>
+
+<h3 id="accountinformationuser_data">Account information (USER_DATA)</h3>
+
+<pre><code>GET /api/v3/account (HMAC SHA256)
+</code></pre>
+
+<p>Get current account information.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "makerCommission": 15,
+  "takerCommission": 15,
+  "buyerCommission": 0,
+  "sellerCommission": 0,
+  "canTrade": true,
+  "canWithdraw": true,
+  "canDeposit": true,
+  "updateTime": 123456789,
+  "balances": [
+    {
+      "asset": "BTC",
+      "free": "4723846.89208129",
+      "locked": "0.00000000"
+    },
+    {
+      "asset": "LTC",
+      "free": "4763368.68006011",
+      "locked": "0.00000000"
+    }
+  ]
+}
+</code></pre>
+
+<h3 id="accounttradelistuser_data">Account trade list (USER_DATA)</h3>
+
+<pre><code>GET /api/v3/myTrades  (HMAC SHA256)
+</code></pre>
+
+<p>Get trades for a specific account and symbol.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>symbol</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+<tr>
+<td>limit</td>
+<td>INT</td>
+<td>NO</td>
+<td>Default 500; max 500.</td>
+</tr>
+<tr>
+<td>fromId</td>
+<td>LONG</td>
+<td>NO</td>
+<td>TradeId to fetch from. Default gets most recent trades.</td>
+</tr>
+<tr>
+<td>recvWindow</td>
+<td>LONG</td>
+<td>NO</td>
+<td></td>
+</tr>
+<tr>
+<td>timestamp</td>
+<td>LONG</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">[
+  {
+    "id": 28457,
+    "orderId": 100234,
+    "price": "4.00000100",
+    "qty": "12.00000000",
+    "commission": "10.10000000",
+    "commissionAsset": "BNB",
+    "time": 1499865549590,
+    "isBuyer": true,
+    "isMaker": false,
+    "isBestMatch": true
+  }
+]
+</code></pre>
+
+<h2 id="userdatastreamendpoints">User data stream endpoints</h2>
+
+<p>Specifics on how user data streams work is in another document.</p>
+
+<h3 id="startuserdatastreamuser_stream">Start user data stream (USER_STREAM)</h3>
+
+<pre><code>POST /api/v1/userDataStream
+</code></pre>
+
+<p>Start a new user data stream. The stream will close after 60 minutes unless a keepalive is sent.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong>
+NONE</p>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{
+  "listenKey": "pqia91ma19a5s61cv6a81va65sdf19v8a65a1a5s61cv6a81va65sdf19v8a65a1"
+}
+</code></pre>
+
+<h3 id="keepaliveuserdatastreamuser_stream">Keepalive user data stream (USER_STREAM)</h3>
+
+<pre><code>PUT /api/v1/userDataStream
+</code></pre>
+
+<p>Keepalive a user data stream to prevent a time out. User data streams will close after 60 minutes. It's recommended to send a ping about every 30 minutes.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>listenKey</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{}
+</code></pre>
+
+<h3 id="closeuserdatastreamuser_stream">Close user data stream (USER_STREAM)</h3>
+
+<pre><code>DELETE /api/v1/userDataStream
+</code></pre>
+
+<p>Close out a user data stream.</p>
+
+<p><strong>Weight:</strong>
+1</p>
+
+<p><strong>Parameters:</strong></p>
+
+<table>
+
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Mandatory</th>
+<th>Description</th>
+</tr>
+
+
+<tr>
+<td>listenKey</td>
+<td>STRING</td>
+<td>YES</td>
+<td></td>
+</tr>
+
+</table>
+
+<p><strong>Response:</strong></p>
+
+<pre><code class="javascript language-javascript">{}
+</code></pre>
+
+<h1 id="filters">Filters</h1>
+
+<p>Filters define trading rules on a symbol or an exchange.
+Filters come in two forms: <code>symbol filters</code> and <code>exchange filters</code>.</p>
+
+<h2 id="symbolfilters">Symbol filters</h2>
+
+<h3 id="price_filter">PRICE_FILTER</h3>
+
+<p>The <code>PRICE_FILTER</code> defines the <code>price</code> rules for a symbol. There are 3 parts:</p>
+
+<ul>
+<li><code>minPrice</code> defines the minimum <code>price</code>/<code>stopPrice</code> allowed.</li>
+
+<li><code>maxPrice</code> defines the maximum <code>price</code>/<code>stopPrice</code> allowed.</li>
+
+<li><code>tickSize</code> defines the intervals that a <code>price</code>/<code>stopPrice</code> can be increased/decreased by.</li>
+</ul>
+
+<p>In order to pass the <code>price filter</code>, the following must be true for <code>price</code>/<code>stopPrice</code>:</p>
+
+<ul>
+<li><code>price</code> >= <code>minPrice</code></li>
+
+<li><code>price</code> &lt;= <code>maxPrice</code></li>
+
+<li>(<code>price</code>-<code>minPrice</code>) % <code>tickSize</code> == 0</li>
+</ul>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "PRICE_FILTER",
+    "minPrice": "0.00000100",
+    "maxPrice": "100000.00000000",
+    "tickSize": "0.00000100"
+  }
+</code></pre>
+
+<h3 id="lot_size">LOT_SIZE</h3>
+
+<p>The <code>LOT_SIZE</code> filter defines the <code>quantity</code> (aka "lots" in auction terms) rules for a symbol. There are 3 parts:</p>
+
+<ul>
+<li><code>minQty</code> defines the minimum <code>quantity</code>/<code>icebergQty</code> allowed.</li>
+
+<li><code>maxQty</code> defines the maximum <code>quantity</code>/<code>icebergQty</code> allowed.</li>
+
+<li><code>stepSize</code> defines the intervals that a <code>quantity</code>/<code>icebergQty</code> can be increased/decreased by.</li>
+</ul>
+
+<p>In order to pass the <code>lot size</code>, the following must be true for <code>quantity</code>/<code>icebergQty</code>:</p>
+
+<ul>
+<li><code>quantity</code> >= <code>minQty</code></li>
+
+<li><code>quantity</code> &lt;= <code>maxQty</code></li>
+
+<li>(<code>quantity</code>-<code>minQty</code>) % <code>stepSize</code> == 0</li>
+</ul>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "LOT_SIZE",
+    "minQty": "0.00100000",
+    "maxQty": "100000.00000000",
+    "stepSize": "0.00100000"
+  }
+</code></pre>
+
+<h3 id="min_notional">MIN_NOTIONAL</h3>
+
+<p>The <code>MIN_NOTIONAL</code> filter defines the minimum notional value allowed for an order on a symbol.
+An order's notional value is the <code>price</code> * <code>quantity</code>.</p>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "MIN_NOTIONAL",
+    "minNotional": "0.00100000"
+  }
+</code></pre>
+
+<h3 id="max_num_orders">MAX<em>NUM</em>ORDERS</h3>
+
+<p>The <code>MAX_NUM_ORDERS</code> filter defines the maximum number of orders an account is allowed to have open on a symbol.
+Note that both "algo" orders and normal orders are counted for this filter.</p>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "MAX_NUM_ORDERS",
+    "limit": 25
+  }
+</code></pre>
+
+<h3 id="max_algo_orders">MAX<em>ALGO</em>ORDERS</h3>
+
+<p>The <code>MAX_ALGO_ORDERS</code> filter defines the maximum number of "algo" orders an account is allowed to have open on a symbol.
+"Algo" orders are <code>STOP_LOSS</code>, <code>STOP_LOSS_LIMIT</code>, <code>TAKE_PROFIT</code>, and <code>TAKE_PROFIT_LIMIT</code> orders.</p>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "MAX_ALGO_ORDERS",
+    "limit": 5
+  }
+</code></pre>
+
+<h2 id="exchangefilters">Exchange Filters</h2>
+
+<h3 id="exchange_max_num_orders">EXCHANGE<em>MAX</em>NUM_ORDERS</h3>
+
+<p>The <code>MAX_NUM_ORDERS</code> filter defines the maximum number of orders an account is allowed to have open on the exchange.
+Note that both "algo" orders and normal orders are counted for this filter.</p>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "EXCHANGE_MAX_NUM_ORDERS",
+    "limit": 1000
+  }
+</code></pre>
+
+<h3 id="exchange_max_algo_orders">EXCHANGE<em>MAX</em>ALGO_ORDERS</h3>
+
+<p>The <code>MAX_ALGO_ORDERS</code> filter defines the maximum number of "algo" orders an account is allowed to have open on the exchange.
+"Algo" orders are <code>STOP_LOSS</code>, <code>STOP_LOSS_LIMIT</code>, <code>TAKE_PROFIT</code>, and <code>TAKE_PROFIT_LIMIT</code> orders.</p>
+
+<p><strong>/exchangeInfo format:</strong></p>
+
+<pre><code class="javascript language-javascript">  {
+    "filterType": "EXCHANGE_MAX_ALGO_ORDERS",
+    "limit": 200
+  }
+</code></pre>
+  </body>
+</html>
